@@ -1,7 +1,7 @@
 /* Todo: 
- * - reminders  (reminders to do maths or music, popup window,
+ * - reminders  (reminders to do jobs, popup window,
  *           more frequent throughout the day until marked as completed)
- * - discord notifications */
+ * - notifications */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,7 +25,8 @@ sigint(int signum) {
 
 int
 main(int argc, char *argv[]) {
-	char timestr[5] = "00:00";
+	char timestr[6] = "00:00";
+	float volume;
 
 	int pipefd[2];
 	pipe(pipefd);
@@ -38,6 +39,8 @@ main(int argc, char *argv[]) {
 	//printf("\n");
 	dup2(pipefd[1], STDOUT_FILENO);
 
+	int volfd[2];
+	pipe(volfd);
 	time_t timer;
 	struct tm tm;
 	struct timespec tp;
@@ -46,14 +49,28 @@ main(int argc, char *argv[]) {
 		time(&timer);
 		localtime_r(&timer, &tm);
 
-		timestr[4] = (tm.tm_min % 10) + '0';
-		timestr[3] = (tm.tm_min - (timestr[4] - '0')) / 10 + '0';
-		timestr[1] = (tm.tm_hour % 10) + '0';
-		timestr[0] = (tm.tm_hour - (timestr[1] - '0')) / 10 + '0';
+		/* Volume string */
+		if (fork() == 0) {
+			dup2(volfd[1], STDOUT_FILENO);
+			execvp("wpctl", (char *[]){ "wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@", NULL });
+			close(STDOUT_FILENO);
+			return 0;
+		}
+		dup2(volfd[0], STDIN_FILENO);
+		scanf("%*s%f", &volume);
+		close(STDIN_FILENO);
 
-		for (int i = 0; i < 5; i++)
-			status[i] = timestr[i];
-		printf("%s %d%s %s %d   %s\n", wdaystr[tm.tm_wday], tm.tm_mday,
+		/* Clock string */
+		if (timestr[4] - '0' != tm.tm_min % 10) {
+			timestr[4] = (tm.tm_min % 10) + '0';
+			timestr[3] = (tm.tm_min - (timestr[4] - '0')) / 10 + '0';
+		}
+		if (timestr[1] - '0' != tm.tm_hour % 10) {
+			timestr[1] = (tm.tm_hour % 10) + '0';
+			timestr[0] = (tm.tm_hour - (timestr[1] - '0')) / 10 + '0';
+		}
+
+		printf("%d%%   %s %d%s %s %d   %s\n", (int)(volume * 100), wdaystr[tm.tm_wday], tm.tm_mday,
 				(unsigned int)(tm.tm_mday % 10 - 1) < 3 ? mdaypostfix[tm.tm_mday % 10] : "th",
 				monstr[tm.tm_mon], tm.tm_year + 1900, timestr);
 		fflush(stdout);
