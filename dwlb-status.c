@@ -100,7 +100,8 @@ main(int argc, char *argv[]) {
 		timestr[0] = (tm.tm_hour - (timestr[1] - '0')) / 10 + '0';
 
 		printf("%s %d%s %s %d  %s\n", wdaystr[tm.tm_wday], tm.tm_mday,
-				(unsigned int)(tm.tm_mday % 20 - 1) < 3 ? mdaypostfix[tm.tm_mday % 20 - 1] : "th",
+				tm.tm_mday % 10 < 2 && (tm.tm_mday < 11 || tm.tm_mday > 13)
+				? mdaypostfix[tm.tm_mday % 10 - 1] : "th",
 				monstr[tm.tm_mon], tm.tm_year + 1900, timestr);
 		fflush(stdout);
 
