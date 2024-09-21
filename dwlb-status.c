@@ -52,6 +52,7 @@ int
 main(int argc, char *argv[]) {
 	static struct termios term;
 	char timestr[6] = "00:00";
+	const char *s;
 	float volume;
 	time_t timer;
 	struct tm tm;
@@ -99,9 +100,13 @@ main(int argc, char *argv[]) {
 		timestr[1] = (tm.tm_hour % 10) + '0';
 		timestr[0] = (tm.tm_hour - (timestr[1] - '0')) / 10 + '0';
 
-		printf("%s %d%s %s %d  %s\n", wdaystr[tm.tm_wday], tm.tm_mday,
-				tm.tm_mday % 10 < 2 && (tm.tm_mday < 11 || tm.tm_mday > 13)
-				? mdaypostfix[tm.tm_mday % 10 - 1] : "th",
+		if ((tm.tm_mday < 11 || tm.tm_mday > 13) && (tm.tm_mday % 10 > 0)
+				&& (tm.tm_mday % 10 < 4)) {
+			s = mdaypostfix[(tm.tm_mday % 10) - 1];
+		} else {
+			s = "th";
+		}
+		printf("%s %d%s %s %d  %s\n", wdaystr[tm.tm_wday], tm.tm_mday, s,
 				monstr[tm.tm_mon], tm.tm_year + 1900, timestr);
 		fflush(stdout);
 
