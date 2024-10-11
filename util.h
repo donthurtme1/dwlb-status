@@ -13,7 +13,7 @@ die(const char *const msg) {
 
 	perror(whole_message);
 	fflush(stderr);
-	exit(1);
+	exit(EXIT_FAILURE);
 }
 
 #endif

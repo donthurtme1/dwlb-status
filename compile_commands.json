@@ -1,0 +1,14 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-c",
+      "-o",
+      "dwlb-status",
+      "dwlb-status.c"
+    ],
+    "directory": "/home/basil/dwlb-status",
+    "file": "/home/basil/dwlb-status/dwlb-status.c",
+    "output": "/home/basil/dwlb-status/dwlb-status"
+  }
+]
