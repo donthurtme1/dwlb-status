@@ -40,11 +40,13 @@ main(int argc, char *argv[]) {
 	dup2(pipefd[1], STDOUT_FILENO);
 
 	/* Volume string */
+	/*
 	int volfd[2];
 	pipe(volfd);
 	if (fork() == 0) {
 		dup2(volfd[1], STDOUT_FILENO);
-		execvp("wpctl", (char *[]){ "wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@", NULL });
+		execvp("wpctl", (char *[]){ "wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@",
+			NULL });
 		close(volfd[1]);
 		return 0;
 	}
@@ -52,6 +54,17 @@ main(int argc, char *argv[]) {
 	dup2(volfd[0], STDIN_FILENO);
 	scanf("%*s%f", &volume);
 	close(volfd[0]);
+	*/
+
+	FILE *bat_now_fp, *bat_full_fp;
+	unsigned int now, full;
+
+	bat_now_fp = fopen("/sys/class/power_supply/BAT1/energy_now", "r");
+	fscanf(bat_now_fp, "%u", &now);
+
+	bat_full_fp = fopen("/sys/class/power_supply/BAT1/energy_full", "r");
+	fscanf(bat_full_fp, "%u", &full);
+	fclose(bat_full_fp);
 
 	time_t timer;
 	struct tm tm;
@@ -60,6 +73,9 @@ main(int argc, char *argv[]) {
 		clock_gettime(CLOCK_MONOTONIC, &tp);
 		time(&timer);
 		localtime_r(&timer, &tm);
+
+		/* Laptop charge string */
+		fscanf(bat_now_fp, "%u", &now);
 
 		/* Clock string */
 		if (timestr[4] - '0' != tm.tm_min % 10) {
@@ -71,9 +87,10 @@ main(int argc, char *argv[]) {
 			timestr[0] = (tm.tm_hour - (timestr[1] - '0')) / 10 + '0';
 		}
 
-		printf("%d%%  │  %s %d%s %s %d   %s\n", (int)(volume * 100), wdaystr[tm.tm_wday], tm.tm_mday,
-				(unsigned int)(tm.tm_mday % 10 - 1) < 3 ? mdaypostfix[tm.tm_mday % 10] : "th",
-				monstr[tm.tm_mon], tm.tm_year + 1900, timestr);
+		printf("%d%%  %s %d%s %s %d  %s\n", (int)((float)now / (float)full * 100),
+				wdaystr[tm.tm_wday], tm.tm_mday, (unsigned int)(tm.tm_mday % 20 - 1) <
+				3 ? mdaypostfix[(tm.tm_mday % 10) - 1] : "th", monstr[tm.tm_mon],
+				tm.tm_year + 1900, timestr);
 		fflush(stdout);
 
 		tp.tv_sec++;
