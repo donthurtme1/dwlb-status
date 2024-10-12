@@ -2,6 +2,7 @@
  * - reminders  (reminders to do jobs, popup window,
  *           more frequent throughout the day until marked as completed)
  * - notifications */
+#include <physfs.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -105,6 +106,7 @@ main(int argc, char *argv[]) {
 		*/
 
 		/* Laptop charge */
+		lseek(fileno(bat_now_fp), 0, SEEK_SET);
 		fscanf(bat_now_fp, "%u", &now);
 
 		/* Clock string */
