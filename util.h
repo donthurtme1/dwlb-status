@@ -3,23 +3,16 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 void
 die(const char *const msg) {
-	register const char *c = msg;
-	register int i = 0;
+	char *whole_message = (char *)malloc(strlen(msg) + sizeof "ERROR: ");
+	strcpy(whole_message, "ERROR: ");
+	strcat(whole_message, msg);
 
-	while (*c != '\0' && i < 256) {
-		i++;
-		c++;
-	}
-
-	cleanup();
-	if (*(c - 1) != '\n') {
-		perror(msg);
-	} else {
-		printf("%s", msg);
-	}
+	perror(whole_message);
+	fflush(stderr);
 	exit(EXIT_FAILURE);
 }
 
