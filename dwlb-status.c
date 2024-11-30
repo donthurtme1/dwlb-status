@@ -1,7 +1,7 @@
 /* Todo: 
- * - reminders  (reminders to do jobs, popup window,
- *           more frequent throughout the day until marked as completed)
+ * - reminders  (reminders to do jobs, popup window, more frequent throughout the day until marked as completed)
  * - notifications */
+#include <pipewire/pipewire.h>
 #include <physfs.h>
 #include <signal.h>
 #include <stdio.h>
@@ -77,8 +77,8 @@ main(int argc, char *argv[]) {
 	dup2(dwlb_fd[1], STDOUT_FILENO);
 	dup2(dwlb_fd[1], STDERR_FILENO);
 
+#ifdef LAPTOP
 	/* Setup power supply file pointers */
-	/*
 	FILE *bat_now_fp, *bat_full_fp;
 	unsigned int now, full;
 
@@ -88,7 +88,7 @@ main(int argc, char *argv[]) {
 	bat_full_fp = fopen("/sys/class/power_supply/BAT1/energy_full", "r");
 	fscanf(bat_full_fp, "%u", &full);
 	fclose(bat_full_fp);
-	*/
+#endif
 
 	while (1) {
 		if (clock_gettime(CLOCK_MONOTONIC, &tc) == -1)
@@ -110,9 +110,11 @@ main(int argc, char *argv[]) {
 		fscanf(stdin, "%*s%f\n", &volume);
 		*/
 
+#ifdef LAPTOP
 		/* Laptop charge */
-		/*lseek(fileno(bat_now_fp), 0, SEEK_SET);
-		fscanf(bat_now_fp, "%u", &now);*/
+		lseek(fileno(bat_now_fp), 0, SEEK_SET);
+		fscanf(bat_now_fp, "%u", &now);
+#endif
 
 		/* Clock string */
 		timestr[4] = (tm.tm_min % 10) + '0';
@@ -126,9 +128,12 @@ main(int argc, char *argv[]) {
 		} else {
 			s = "th";
 		}
-		printf("%d%%  %s %d%s %s %d  %s\n", 1,//(int)((float)now / (float)full * 100),
-				wdaystr[tm.tm_wday], tm.tm_mday, s, monstr[tm.tm_mon],
-				tm.tm_year + 1900, timestr);
+
+#ifdef LAPTOP
+		printf("%d%%  %s %d%s %s %d  %s\n", (int)((float)now / (float)full * 100), wdaystr[tm.tm_wday], tm.tm_mday, s, monstr[tm.tm_mon], tm.tm_year + 1900, timestr);
+#else
+		printf("%d%%  %s %d%s %s %d  %s\n", wdaystr[tm.tm_wday], tm.tm_mday, s, monstr[tm.tm_mon], tm.tm_year + 1900, timestr);
+#endif
 		fflush(stdout);
 
 		tc.tv_sec++;
