@@ -11,11 +11,11 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "util.h"
+
 void cleanup(void);
 void sigint(int signum);
 void sigkill(int signum);
-
-#include "util.h"
 
 static const char *wdaystr[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 static const char *mdaypostfix[] = { "st", "nd", "rd" };
@@ -23,27 +23,27 @@ static const char *monstr[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
 	"Sep", "Oct", "Nov", "Dec" };
 
 static char status[64];
-static pid_t dwlbpid, wppid;
+static pid_t dwlb_pid, wireplumber_pid;
 
 void
 cleanup(void) {
-	if (dwlbpid) kill(dwlbpid, SIGTERM);
-	if (wppid) kill(wppid, SIGTERM);
+	if (dwlb_pid) kill(dwlb_pid, SIGTERM);
+	if (wireplumber_pid) kill(wireplumber_pid, SIGTERM);
 }
 
 void
 sigint(int signum) {
-	if (dwlbpid) kill(dwlbpid, SIGINT);
-	if (wppid) kill(wppid, SIGINT);
+	if (dwlb_pid) kill(dwlb_pid, SIGINT);
+	if (wireplumber_pid) kill(wireplumber_pid, SIGINT);
 	putc('\n', stdout);
-	exit(0);
+	exit(EXIT_SUCCESS);
 }
 
 void
 sigkill(int signum) {
-	if (dwlbpid) kill(dwlbpid, SIGKILL);
-	if (wppid) kill(wppid, SIGKILL);
-	exit(0);
+	if (dwlb_pid) kill(dwlb_pid, SIGKILL);
+	if (wireplumber_pid) kill(wireplumber_pid, SIGKILL);
+	exit(EXIT_SUCCESS);
 }
 
 int
@@ -55,7 +55,6 @@ main(int argc, char *argv[]) {
 	time_t timer;
 	struct tm tm;
 	struct timespec tc;
-	int dwlbfd[2], wpfd[2]; /* dwlb and wireplumber fd's */
 
 	/* Setup */
 	signal(SIGINT, &sigint);
@@ -63,18 +62,23 @@ main(int argc, char *argv[]) {
 	atexit(&cleanup);
 
 	/* Setup pipes */
-	pipe(dwlbfd);
-	pipe(wpfd);
+	int dwlb_fd[2], wireplumber_fd[2];
 
-	if ((dwlbpid = fork()) == 0) {
-		dup2(dwlbfd[0], STDIN_FILENO);
+	pipe(dwlb_fd);
+	pipe(wireplumber_fd);
+
+	dwlb_pid = fork();
+	if (dwlb_pid == 0) {
+		dup2(dwlb_fd[0], STDIN_FILENO);
 		execvp("dwlb", (char *[]){ "dwlb", "-status-stdin", "all", NULL });
 		return 0;
 	}
 
-	dup2(dwlbfd[1], STDOUT_FILENO);
-	dup2(dwlbfd[1], STDERR_FILENO);
+	dup2(dwlb_fd[1], STDOUT_FILENO);
+	dup2(dwlb_fd[1], STDERR_FILENO);
 
+	/* Setup power supply file pointers */
+	/*
 	FILE *bat_now_fp, *bat_full_fp;
 	unsigned int now, full;
 
@@ -84,6 +88,7 @@ main(int argc, char *argv[]) {
 	bat_full_fp = fopen("/sys/class/power_supply/BAT1/energy_full", "r");
 	fscanf(bat_full_fp, "%u", &full);
 	fclose(bat_full_fp);
+	*/
 
 	while (1) {
 		if (clock_gettime(CLOCK_MONOTONIC, &tc) == -1)
@@ -94,18 +99,19 @@ main(int argc, char *argv[]) {
 
 		/* Volume */
 		/*
-		if ((wppid = fork()) == 0) {
-			dup2(wpfd[1], STDOUT_FILENO);
-			execvp("wpctl", (char *[]){ "wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@",
-				NULL });
+		wireplumber_pid = fork();
+		if (wireplumber_pid == 0) {
+			dup2(wireplumber_fd[1], STDOUT_FILENO);
+			execvp("wpctl", (char *[]){ "wpctl", "get-volume",
+				"@DEFAULT_AUDIO_SINK@", NULL });
 			return 0;
 		}
-		dup2(wpfd[0], STDIN_FILENO);
+		dup2(wireplumber_fd[0], STDIN_FILENO);
 		fscanf(stdin, "%*s%f\n", &volume);
 		*/
 
 		/* Laptop charge */
-		fscanf(bat_now_fp, "%u", &now);
+		//fscanf(bat_now_fp, "%u", &now);
 
 		/* Clock string */
 		timestr[4] = (tm.tm_min % 10) + '0';
@@ -119,7 +125,7 @@ main(int argc, char *argv[]) {
 		} else {
 			s = "th";
 		}
-		printf("%d%%  %s %d%s %s %d  %s\n", (int)((float)now / (float)full * 100),
+		printf("%d%%  %s %d%s %s %d  %s\n", 1,//(int)((float)now / (float)full * 100),
 				wdaystr[tm.tm_wday], tm.tm_mday, s, monstr[tm.tm_mon],
 				tm.tm_year + 1900, timestr);
 		fflush(stdout);
