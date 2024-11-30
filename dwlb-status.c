@@ -2,6 +2,7 @@
  * - reminders  (reminders to do jobs, popup window,
  *           more frequent throughout the day until marked as completed)
  * - notifications */
+#include <physfs.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,8 +20,7 @@ void sigkill(int signum);
 
 static const char *wdaystr[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 static const char *mdaypostfix[] = { "st", "nd", "rd" };
-static const char *monstr[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug",
-	"Sep", "Oct", "Nov", "Dec" };
+static const char *monstr[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
 static char status[64];
 static pid_t dwlb_pid, wireplumber_pid;
@@ -111,7 +111,8 @@ main(int argc, char *argv[]) {
 		*/
 
 		/* Laptop charge */
-		//fscanf(bat_now_fp, "%u", &now);
+		/*lseek(fileno(bat_now_fp), 0, SEEK_SET);
+		fscanf(bat_now_fp, "%u", &now);*/
 
 		/* Clock string */
 		timestr[4] = (tm.tm_min % 10) + '0';
