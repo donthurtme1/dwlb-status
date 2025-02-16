@@ -103,12 +103,12 @@ main(int argc, char *argv[]) {
 		if (wireplumber_pid == 0) {
 			close(wireplumber_fd[0]);
 			dup2(wireplumber_fd[1], STDOUT_FILENO);
-			execvp("wpctl", (char *[]){ "wpctl", "get-volume",
-				"@DEFAULT_AUDIO_SINK@", NULL });
+			execvp("wpctl", (char *[]){ "wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@", NULL });
 			exit(EXIT_FAILURE);
 		}
 		dup2(wireplumber_fd[0], STDIN_FILENO);
 		close(wireplumber_fd[1]);
+		wait(&wireplumber_pid);
 		fscanf(stdin, "%*s%f\n", &volume);
 
 #ifdef LAPTOP
@@ -133,7 +133,11 @@ main(int argc, char *argv[]) {
 #ifdef LAPTOP
 		printf("%d%%  %s %d%s %s %d  %s\n", (int)((float)now / (float)full * 100), wdaystr[tm.tm_wday], tm.tm_mday, s, monstr[tm.tm_mon], tm.tm_year + 1900, timestr);
 #else
+#	ifdef VOL
 		printf("Vol %d%%   --    %s %d%s %s %d  ::  %s (UTC+%d)\n", (int)(volume * 100), wdaystr[tm.tm_wday], tm.tm_mday, s, monstr[tm.tm_mon], tm.tm_year + 1900, timestr, (int)(tm.tm_gmtoff / 3600));
+#	else
+		printf("%s %d%s %s %d  ::  %s (UTC+%d)\n", wdaystr[tm.tm_wday], tm.tm_mday, s, monstr[tm.tm_mon], tm.tm_year + 1900, timestr, (int)(tm.tm_gmtoff / 3600));
+#	endif
 #endif
 		fflush(stdout);
 
