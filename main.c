@@ -27,13 +27,11 @@ static const char *monstr[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
 static char status[64];
 static pid_t dwlb_pid;
 
-void
-cleanup(void) {
+void cleanup(void) {
 	if (dwlb_pid) kill(dwlb_pid, SIGTERM);
 }
 
-void
-sighandler(int signum) {
+void sighandler(int signum) {
 	switch (signum) {
 		case SIGINT:
 			if (dwlb_pid) kill(dwlb_pid, SIGINT);
@@ -46,12 +44,32 @@ sighandler(int signum) {
 	}
 }
 
-int
-main(int argc, char *argv[]) {
+void getvolume(char *volstr) {
+	/* Volume */
+	int wpctl_fd[2];
+	pipe(wpctl_fd);
+	int wpctl_pid = fork();
+	if (wpctl_pid == 0) {
+		close(wpctl_fd[0]);
+		dup2(wpctl_fd[1], STDOUT_FILENO);
+		execvp("wpctl", (char *[]){ "wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@", NULL });
+		exit(1);
+	}
+	dup2(wpctl_fd[0], STDIN_FILENO);
+	close(wpctl_fd[1]);
+
+	int r = scanf("Volume: 0.%s", volstr);
+	if (r < 0)
+		clearerr(stdin);
+	kill(wpctl_pid, SIGKILL);
+	close(wpctl_fd[0]);
+}
+
+int main(int argc, char *argv[]) {
 	static struct termios term;
 	char timestr[6] = "00:00";
 	const char *s;
-	char *volume;
+	char volume[8];
 	time_t timer;
 	struct tm tm;
 	struct timespec tc;
@@ -77,10 +95,6 @@ main(int argc, char *argv[]) {
 	close(dwlb_fd[0]);
 	dup2(dwlb_fd[1], STDOUT_FILENO);
 
-#ifdef VOLUME
-	/* Open pipewire socket */
-#endif
-
 #ifdef LAPTOP
 	/* Setup power supply file pointers */
 	FILE *bat_now_fp, *bat_full_fp;
@@ -99,65 +113,37 @@ main(int argc, char *argv[]) {
 		time(&timer);
 		localtime_r(&timer, &tm);
 
-#ifdef VOLUME
-		/* Volume */
-		int pulse_fd[2];
-		pipe(pulse_fd);
-		int pulse_pid = fork();
-		if (pulse_pid == 0) {
-			close(pulse_fd[0]);
-			dup2(pulse_fd[1], STDOUT_FILENO);
-			execvp("pulsemixer", (char *[]){ "pulsemixer", "--get-volume", "--id", "60", NULL });
-			exit(EXIT_FAILURE);
-		}
-		dup2(pulse_fd[0], STDIN_FILENO);
-		close(pulse_fd[1]);
-		size_t sizezezeze;
-		if (wait(&pulse_pid) < 0)
-			kill(pulse_pid, SIGKILL);
-		int len = getline(&volume, &sizezezeze, stdin);
-		volume[len - 1] = '\0';
-		close(pulse_fd[0]);
-#endif
-
 #ifdef LAPTOP
 		/* Laptop charge */
 		lseek(fileno(bat_now_fp), 0, SEEK_SET);
 		fscanf(bat_now_fp, "%u", &now);
 #endif
 
-		/* Only do calculations if the time has changed */
-		static int old_min = -1;
-		static float old_volume = -1;
-		if (1) {
-			old_min = tm.tm_min;
-
-			/* Clock string */
-			timestr[4] = (tm.tm_min % 10) + '0';
-			timestr[3] = (tm.tm_min - (timestr[4] - '0')) / 10 + '0';
-			timestr[1] = (tm.tm_hour % 10) + '0';
-			timestr[0] = (tm.tm_hour - (timestr[1] - '0')) / 10 + '0';
-			if ((tm.tm_mday < 11 || tm.tm_mday > 13) && (tm.tm_mday % 10 > 0) &&
-					(tm.tm_mday % 10 < 4)) {
-				s = mdaypostfix[(tm.tm_mday % 10) - 1];
-			} else {
-				s = "th";
-			}
+		/* Clock string */
+		timestr[4] = (tm.tm_min % 10) + '0';
+		timestr[3] = (tm.tm_min - (timestr[4] - '0')) / 10 + '0';
+		timestr[1] = (tm.tm_hour % 10) + '0';
+		timestr[0] = (tm.tm_hour - (timestr[1] - '0')) / 10 + '0';
+		if ((tm.tm_mday < 11 || tm.tm_mday > 13) && (tm.tm_mday % 10 > 0) &&
+				(tm.tm_mday % 10 < 4)) {
+			s = mdaypostfix[(tm.tm_mday % 10) - 1];
+		} else {
+			s = "th";
+		}
 
 #ifdef LAPTOP
 			printf("Bat %d%%   --    ", (int)(((float)now / (float)full) * 100));
 #endif
 #ifdef VOLUME
-			printf("Vol %s%%   --    ", volume);
+		getvolume(volume);
+		printf("Vol %s%%   --    ", volume);
 #endif
-			printf("%s %d%s %s %d  ::  %s (UTC+%d)\n", wdaystr[tm.tm_wday], tm.tm_mday, s, monstr[tm.tm_mon], tm.tm_year + 1900, timestr, (int)(tm.tm_gmtoff / 3600));
-			fflush(stdout);
-		}
+		printf("%s %d%s %s %d  ::  %s (UTC+%d)\n", wdaystr[tm.tm_wday], tm.tm_mday, s, monstr[tm.tm_mon], tm.tm_year + 1900, timestr, (int)(tm.tm_gmtoff / 3600));
+		fflush(stdout);
 
 		tc.tv_sec++;
 		tc.tv_nsec = 0;
 		clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &tc, NULL);
-
 	}
 
 	return 0;
