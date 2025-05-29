@@ -1,5 +1,9 @@
+CFLAGS=`pkg-config --cflags --libs wireplumber-0.5`
+
 make:
-	gcc -o dwlb-status -g main.c -I/usr/include/pipewire-0.3 -I/usr/include/spa-0.2
+	gcc -o dwlb-status -g main.c $(CFLAGS)
+test:
+	gcc -o test test.c $(CFLAGS)
 install: make
 	cp -f dwlb-status /usr/local/bin/dwlb-status
 uninstall:
