@@ -74,7 +74,7 @@ getvolume(char *volstr)
 }
 
 void
-getmpdsong(char *mpd_str)
+getmpdsong(char *mpd_str, size_t max_len)
 {
 	int mpc_filedes[2];
 	pipe(mpc_filedes);
@@ -89,13 +89,19 @@ getmpdsong(char *mpd_str)
 	}
 	waitid(P_ALL, 0, NULL, WEXITED | WSTOPPED);
 
+	struct pollfd poll_fds = { .fd = mpc_filedes[0], .events = POLLIN };
+	int poll_result = poll(&poll_fds, 1, 0);
+	if (poll_result == 0) {
+		mpd_str[0] = '\0';
+		return;
+	}
+
 	FILE *input_fp = fdopen(mpc_filedes[0], "r");
-	//int len = fread(mpd_str, sizeof(char), 63, input_fp);
-	size_t size = 64;
+	size_t size = max_len;
 	char *line = NULL;
 	int len = getline(&line, &size, input_fp);
-	if (len > 64)
-		len = 64;
+	if (len > max_len)
+		len = max_len;
 	strncpy(mpd_str, line, len);
 	mpd_str[len - 1] = '\0';
 
@@ -113,7 +119,7 @@ main(int argc, char *argv[])
 	char timestr[6] = "00:00";
 	const char *s;
 	char volume[8];
-	char mpd_str[64];
+	char mpd_str[96];
 	time_t timer;
 	struct tm tm;
 	struct timespec tc;
@@ -175,21 +181,24 @@ main(int argc, char *argv[])
 			s = "th";
 		}
 
-		getmpdsong(mpd_str);
-		printf("%s    --    ", mpd_str);
+		getmpdsong(mpd_str, sizeof(mpd_str));
+		printf("%s    │    ", mpd_str);
 
 #ifdef LAPTOP
-		printf("Bat %d%%    --    ", (int)(((float)now / (float)full) * 100));
+		printf("Bat %d%%    │    ", (int)(((float)now / (float)full) * 100));
 #endif
 
 		getvolume(volume);
-		printf("Vol %s%%    --    ", volume);
+		printf("Vol %s%%    │    ", volume);
 
-		printf("%s %d%s %s %d  ::  %s (UTC+%d)\n", wdaystr[tm.tm_wday], tm.tm_mday, s, monstr[tm.tm_mon], tm.tm_year + 1900, timestr, (int)(tm.tm_gmtoff / 3600));
+		printf("%s %d%s %s %d - %s (UTC+%d)  \n", wdaystr[tm.tm_wday], tm.tm_mday, s, monstr[tm.tm_mon], tm.tm_year + 1900, timestr, (int)(tm.tm_gmtoff / 3600));
 		fflush(stdout);
 
-		tc.tv_sec++;
-		tc.tv_nsec = 0;
+		tc.tv_nsec += 50000000;
+		if (tc.tv_nsec >= 100000000) {
+			tc.tv_nsec -= 100000000;
+			tc.tv_sec++;
+		}
 		clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &tc, NULL);
 	}
 
