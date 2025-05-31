@@ -3,6 +3,7 @@
  * - notifications */
 #include <pipewire/pipewire.h>
 #include <physfs.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,7 +48,18 @@ sighandler(int signum)
 }
 
 void
-getvolume(char *volstr)
+set_title(char *title)
+{
+	pid_t dwlb_pid = fork();
+	if (dwlb_pid == 0) {
+		execvp("dwlb", (char *[]){ "dwlb", "-title", "all", title, NULL });
+		exit(1);
+	}
+	waitid(P_PID, dwlb_pid, NULL, WEXITED | WSTOPPED);
+}
+
+void
+get_volume(char *volstr)
 {
 	int wpctl_filedes[2];
 	pipe(wpctl_filedes);
@@ -60,21 +72,113 @@ getvolume(char *volstr)
 		execvp("wpctl", (char *[]){ "wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@", NULL });
 		exit(1);
 	}
-	waitid(P_ALL, 0, NULL, WEXITED | WSTOPPED);
+	waitid(P_PID, wpctl_pid, NULL, WEXITED | WSTOPPED);
+
+	struct pollfd poll_fds = { .fd = wpctl_filedes[0], .events = POLLIN };
+	int poll_result = poll(&poll_fds, 1, 0);
+	if (poll_result == 0) {
+		volstr[0] = '\0';
+		fprintf(stderr, "get_volume(): failed to read from wpctl\n");
+		goto cleanup;
+	}
 
 	FILE *input_fp = fdopen(wpctl_filedes[0], "r");
-	fscanf(input_fp, "Volume: 0.%s", volstr);
-	//volstr[len] = '\0';
+	fscanf(input_fp, "Volume: %s", volstr);
 
 	/* Cleanup */
 	fclose(input_fp);
+	clearerr(stdin);
+cleanup:
 	close(wpctl_filedes[0]);
 	close(wpctl_filedes[1]);
-	clearerr(stdin);
+}
+
+int
+str_display_len(char *str)
+{
+	int width = 0;
+
+	while (str[width] != '\0')
+	{
+		/* Ascii character */
+		if (str[width] <= 0x7f) {
+			width++;
+			continue;
+		}
+
+		/* Decode UTF-8 header */
+		if (str[width] <= 0xdf) { /* 2 bytes */
+			width += 2;
+		}
+		else if (str[width] <= 0xef) { /* 3 bytes */
+			width += 3;
+		}
+		else if (str[width] <= 0xf7) { /* 4 bytes */
+			width += 4;
+		}
+		else { /* Uh oh... */
+			printf("Fuck off with ur non utf-8 compatible string... >:(\n");
+			fprintf(stderr, "Fuck off with ur non utf-8 compatible string... >:(\n\
+				String: %s\nIndex: %d\nIn func: `str_size_to_len()`\n",
+					str, width);
+			exit(1);
+		}
+	}
+
+	return width;
 }
 
 void
-getmpdsong(char *mpd_str, size_t max_len)
+write_utf8(char *str, int n)
+{
+	/* Count number of bytes to be written */
+	int bytes = 0;
+	for (int n_utf8_chars = 0;
+			n_utf8_chars < n;
+			n_utf8_chars++)
+	{
+		/* Ascii character */
+		if (str[bytes] <= 0x7f) {
+			bytes++;
+			continue;
+		}
+
+		/* Decode UTF-8 header */
+		if (str[bytes] <= 0xdf) { /* 2 bytes */
+			bytes += 2;
+		}
+		else if (str[bytes] <= 0xef) { /* 3 bytes */
+			bytes += 3;
+		}
+		else if (str[bytes] <= 0xf7) { /* 4 bytes */
+			bytes += 4;
+		}
+		else { /* Uh oh... */
+			printf("Fuck off with ur non utf-8 compatible string... >:(\n");
+			fprintf(stderr, "Fuck off with ur non utf-8 compatible string... >:(\n\
+				String: %s\nIndex: %d\nIn func: `write_utf8()`\n",
+					str, bytes);
+			exit(1);
+		}
+	}
+
+	/* Write the thing */
+	fwrite(str, 1, bytes, stdout);
+}
+
+int
+scrolling_text_offset(char *utf8_str, int timer)
+{
+	static int offset = -1;
+
+	return 0;
+}
+
+/*
+ * Returns length of string in bytes
+ */
+int
+get_mpd_song(char *mpd_str, size_t max_len)
 {
 	int mpc_filedes[2];
 	pipe(mpc_filedes);
@@ -87,13 +191,16 @@ getmpdsong(char *mpd_str, size_t max_len)
 		execvp("mpc", (char *[]){ "mpc", "current", NULL });
 		exit(1);
 	}
-	waitid(P_ALL, 0, NULL, WEXITED | WSTOPPED);
+	waitid(P_PID, mpc_pid, NULL, WEXITED | WSTOPPED);
 
 	struct pollfd poll_fds = { .fd = mpc_filedes[0], .events = POLLIN };
-	int poll_result = poll(&poll_fds, 1, 0);
+	int poll_result = poll(&poll_fds, 1, 10);
 	if (poll_result == 0) {
 		mpd_str[0] = '\0';
-		return;
+		close(mpc_filedes[0]);
+		close(mpc_filedes[1]);
+		fprintf(stderr, "get_mpd_song(): failed to read from mpc\n");
+		return 0;
 	}
 
 	FILE *input_fp = fdopen(mpc_filedes[0], "r");
@@ -107,9 +214,12 @@ getmpdsong(char *mpd_str, size_t max_len)
 
 	/* Cleanup */
 	fclose(input_fp);
+	clearerr(stdin);
 	close(mpc_filedes[0]);
 	close(mpc_filedes[1]);
-	clearerr(stdin);
+	fprintf(stderr, "get_mpd_song(): read %s from mpc\n", mpd_str);
+
+	return len;
 }
 
 int
@@ -119,15 +229,20 @@ main(int argc, char *argv[])
 	char timestr[6] = "00:00";
 	const char *s;
 	char volume[8];
-	char mpd_str[96];
+	char mpd_str[128];
 	time_t timer;
 	struct tm tm;
 	struct timespec tc;
+
+	int dev_null_fd = open("/dev/null", 0);
+	dup2(dev_null_fd, STDERR_FILENO);
+	close(dev_null_fd);
 
 	/* Setup */
 	signal(SIGINT, &sighandler);
 	signal(SIGKILL, &sighandler);
 	atexit(&cleanup);
+	set_title("^fg()^bg()  │");
 
 	/* Setup pipes */
 	int dwlb_fd[2];
@@ -181,17 +296,40 @@ main(int argc, char *argv[])
 			s = "th";
 		}
 
-		getmpdsong(mpd_str, sizeof(mpd_str));
-		printf("%s    │    ", mpd_str);
+		int mpd_strlen = get_mpd_song(mpd_str, sizeof(mpd_str));
+		if (mpd_strlen > 0)
+		{
+			int mpd_strwidth = str_display_len(mpd_str);
+			/* Ensure title of current song will fit in bar */
+			if (mpd_strwidth < 68) {
+				printf("Playing:  %s    ", mpd_str);
+			}
+			else { /* Scroll text */
+				static int scroll_timer = 0, offset = 0;
+
+				printf("Playing:  ");
+				write_utf8(&mpd_str[offset], 67);
+				printf("    ");
+
+				/*
+				 * Increment scroll_timer and calculate string index
+				 */
+				scroll_timer++;
+				offset = scrolling_text_offset(mpd_str, scroll_timer);
+
+				if (scroll_timer >= mpd_strlen - 67)
+					scroll_timer = 0;
+			}
+		}
 
 #ifdef LAPTOP
-		printf("Bat %d%%    │    ", (int)(((float)now / (float)full) * 100));
+		printf("│    Bat %d%%    ", (int)(((float)now / (float)full) * 100));
 #endif
 
-		getvolume(volume);
-		printf("Vol %s%%    │    ", volume);
+		get_volume(volume);
+		printf("│    Vol %s%%    ", volume);
 
-		printf("%s %d%s %s %d - %s (UTC+%d)  \n", wdaystr[tm.tm_wday], tm.tm_mday, s, monstr[tm.tm_mon], tm.tm_year + 1900, timestr, (int)(tm.tm_gmtoff / 3600));
+		printf("│    %s %d%s %s %d - %s (UTC+%d)  \n", wdaystr[tm.tm_wday], tm.tm_mday, s, monstr[tm.tm_mon], tm.tm_year + 1900, timestr, (int)(tm.tm_gmtoff / 3600));
 		fflush(stdout);
 
 		tc.tv_nsec += 50000000;
