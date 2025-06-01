@@ -302,7 +302,7 @@ main(int argc, char *argv[])
 			int mpd_strwidth = str_utf8_len(mpd_str);
 			/* Ensure title of current song will fit in bar */
 			if (mpd_strwidth < 67) {
-				printf("^fg(e0def4)Playing:  %s    ", mpd_str);
+				printf("^fg(e0def4)Playing:  %s    ^fg()", mpd_str);
 			}
 			else { /* Scroll text */
 				static int scroll_timer = 0, offset = 0;
