@@ -94,7 +94,7 @@ cleanup:
 }
 
 int
-str_display_len(char *str)
+str_utf8_len(char *str)
 {
 	int width = 0;
 
@@ -299,17 +299,17 @@ main(int argc, char *argv[])
 		int mpd_strlen = get_mpd_song(mpd_str, sizeof(mpd_str));
 		if (mpd_strlen > 0)
 		{
-			int mpd_strwidth = str_display_len(mpd_str);
+			int mpd_strwidth = str_utf8_len(mpd_str);
 			/* Ensure title of current song will fit in bar */
-			if (mpd_strwidth < 68) {
-				printf("Playing:  %s    ", mpd_str);
+			if (mpd_strwidth < 67) {
+				printf("^fg(e0def4)Playing:  %s    ", mpd_str);
 			}
 			else { /* Scroll text */
 				static int scroll_timer = 0, offset = 0;
 
-				printf("Playing:  ");
-				write_utf8(&mpd_str[offset], 67);
-				printf("    ");
+				printf("^fg(e0def4)Playing:  ");
+				write_utf8(&mpd_str[offset], mpd_strwidth);
+				printf("    ^fg()");
 
 				/*
 				 * Increment scroll_timer and calculate string index
@@ -323,18 +323,18 @@ main(int argc, char *argv[])
 		}
 
 #ifdef LAPTOP
-		printf("│    Bat %d%%    ", (int)(((float)now / (float)full) * 100));
+		printf("│    ^fg(e0def4)Bat %d%%    ^fg()", (int)(((float)now / (float)full) * 100));
 #endif
 
 		get_volume(volume);
-		printf("│    Vol %s%%    ", volume);
+		printf("│    ^fg(e0def4)Vol %s%%    ^fg()", volume);
 
-		printf("│    %s %d%s %s %d - %s (UTC+%d)  \n", wdaystr[tm.tm_wday], tm.tm_mday, s, monstr[tm.tm_mon], tm.tm_year + 1900, timestr, (int)(tm.tm_gmtoff / 3600));
+		printf("│    ^fg(e0def4)%s %d%s %s %d - %s (UTC+%d)  \n", wdaystr[tm.tm_wday], tm.tm_mday, s, monstr[tm.tm_mon], tm.tm_year + 1900, timestr, (int)(tm.tm_gmtoff / 3600));
 		fflush(stdout);
 
 		tc.tv_nsec += 50000000;
 		if (tc.tv_nsec >= 100000000) {
-			tc.tv_nsec -= 100000000;
+			tc.tv_nsec = 0;
 			tc.tv_sec++;
 		}
 		clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &tc, NULL);
