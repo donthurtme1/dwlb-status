@@ -1,7 +1,6 @@
 /* Todo: 
  * - reminders  (reminders to do jobs, popup window, more frequent throughout the day until marked as completed)
  * - notifications */
-#include <pipewire/pipewire.h>
 #include <physfs.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -118,9 +117,8 @@ str_utf8_len(char *str)
 		}
 		else { /* Uh oh... */
 			printf("Fuck off with ur non utf-8 compatible string... >:(\n");
-			fprintf(stderr, "Fuck off with ur non utf-8 compatible string... >:(\n\
-				String: %s\nIndex: %d\nIn func: `str_size_to_len()`\n",
-					str, width);
+			fprintf(stderr, "Fuck off with ur non utf-8 compatible string... >:(\n" \
+				"String: %s\nIndex: %d\nIn func: `str_size_to_len()`\n", str, width);
 			exit(1);
 		}
 	}
@@ -155,9 +153,8 @@ write_utf8(char *str, int n)
 		}
 		else { /* Uh oh... */
 			printf("Fuck off with ur non utf-8 compatible string... >:(\n");
-			fprintf(stderr, "Fuck off with ur non utf-8 compatible string... >:(\n\
-				String: %s\nIndex: %d\nIn func: `write_utf8()`\n",
-					str, bytes);
+			fprintf(stderr, "Fuck off with ur non utf-8 compatible string... >:(\n" \
+				"String: %s\nIndex: %d\nIn func: `write_utf8()`\n", str, bytes);
 			exit(1);
 		}
 	}
@@ -296,19 +293,19 @@ main(int argc, char *argv[])
 			s = "th";
 		}
 
-		int mpd_strlen = get_mpd_song(mpd_str, sizeof(mpd_str));
-		if (mpd_strlen > 0)
+		int mpd_strsize = get_mpd_song(mpd_str, sizeof(mpd_str));
+		if (mpd_strsize > 0)
 		{
-			int mpd_strwidth = str_utf8_len(mpd_str);
+			int mpd_strlen = str_utf8_len(mpd_str);
 			/* Ensure title of current song will fit in bar */
-			if (mpd_strwidth < 67) {
+			if (mpd_strlen < 67) {
 				printf("^fg(e0def4)Playing:  %s    ^fg()", mpd_str);
 			}
 			else { /* Scroll text */
 				static int scroll_timer = 0, offset = 0;
 
 				printf("^fg(e0def4)Playing:  ");
-				write_utf8(&mpd_str[offset], mpd_strwidth);
+				write_utf8(&mpd_str[offset], 67);
 				printf("    ^fg()");
 
 				/*
@@ -317,7 +314,7 @@ main(int argc, char *argv[])
 				scroll_timer++;
 				offset = scrolling_text_offset(mpd_str, scroll_timer);
 
-				if (scroll_timer >= mpd_strlen - 67)
+				if (scroll_timer >= mpd_strsize - 67)
 					scroll_timer = 0;
 			}
 		}
