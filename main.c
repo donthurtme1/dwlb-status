@@ -82,7 +82,24 @@ get_volume(char *volstr)
 	}
 
 	FILE *input_fp = fdopen(wpctl_filedes[0], "r");
-	fscanf(input_fp, "Volume: %s", volstr);
+	float f_vol;
+	fscanf(input_fp, "Volume: %f", &f_vol);
+
+	/* Convert to integer before converting to string */
+	int i_vol = (int)(f_vol * 100.0f);
+	volstr[0] = '\0';
+	for (int i = 0;
+			i < 7 && i_vol > 0;
+			i++)
+	{
+		/*
+		 * Shift contents of volstr over by a byte,
+		 * then recalculate the first byte.
+		 */
+		*(int *)volstr <<= 8;
+		volstr[0] = (i_vol % 10) + '0';
+		i_vol /= 10;
+	}
 
 	/* Cleanup */
 	fclose(input_fp);
@@ -95,60 +112,66 @@ cleanup:
 int
 str_utf8_len(char *str)
 {
-	int width = 0;
-
-	while (str[width] != '\0')
+	int utf8_len = 0;
+	for (int size = 0;
+			str[size] != '\0';
+			utf8_len++)
 	{
 		/* Ascii character */
-		if (str[width] <= 0x7f) {
-			width++;
+		if ((unsigned char)str[size] <= 0x7f) {
+			size++;
 			continue;
 		}
 
 		/* Decode UTF-8 header */
-		if (str[width] <= 0xdf) { /* 2 bytes */
-			width += 2;
+		if ((unsigned char)str[size] <= 0xdf) { /* 2 bytes */
+			size += 2;
 		}
-		else if (str[width] <= 0xef) { /* 3 bytes */
-			width += 3;
+		else if ((unsigned char)str[size] <= 0xef) { /* 3 bytes */
+			size += 3;
 		}
-		else if (str[width] <= 0xf7) { /* 4 bytes */
-			width += 4;
+		else if ((unsigned char)str[size] <= 0xf7) { /* 4 bytes */
+			size += 4;
 		}
 		else { /* Uh oh... */
 			printf("Fuck off with ur non utf-8 compatible string... >:(\n");
 			fprintf(stderr, "Fuck off with ur non utf-8 compatible string... >:(\n" \
-				"String: %s\nIndex: %d\nIn func: `str_size_to_len()`\n", str, width);
+				"String: %s\nIndex: %d\nIn func: `str_size_to_len()`\n", str, size);
 			exit(1);
 		}
 	}
 
-	return width;
+	return utf8_len;
 }
 
 void
 write_utf8(char *str, int n)
 {
 	/* Count number of bytes to be written */
+	int end_char_size = 0; /* Last character's size in bytes */
 	int bytes = 0;
 	for (int n_utf8_chars = 0;
 			n_utf8_chars < n;
 			n_utf8_chars++)
 	{
 		/* Ascii character */
-		if (str[bytes] <= 0x7f) {
+		if ((unsigned char)str[bytes] <= 0x7f) {
+			end_char_size = 1;
 			bytes++;
 			continue;
 		}
 
 		/* Decode UTF-8 header */
-		if (str[bytes] <= 0xdf) { /* 2 bytes */
+		if ((unsigned char)str[bytes] <= 0xdf) { /* 2 bytes */
+			end_char_size = 2;
 			bytes += 2;
 		}
-		else if (str[bytes] <= 0xef) { /* 3 bytes */
+		else if ((unsigned char)str[bytes] <= 0xef) { /* 3 bytes */
+			end_char_size = 3;
 			bytes += 3;
 		}
-		else if (str[bytes] <= 0xf7) { /* 4 bytes */
+		else if ((unsigned char)str[bytes] <= 0xf7) { /* 4 bytes */
+			end_char_size = 4;
 			bytes += 4;
 		}
 		else { /* Uh oh... */
@@ -239,7 +262,6 @@ main(int argc, char *argv[])
 	signal(SIGINT, &sighandler);
 	signal(SIGKILL, &sighandler);
 	atexit(&cleanup);
-	set_title("^fg()^bg()  │");
 
 	/* Setup pipes */
 	int dwlb_fd[2];
@@ -270,6 +292,7 @@ main(int argc, char *argv[])
 	fclose(bat_full_fp);
 #endif
 
+	set_title("^fg()^bg()  │");
 	clock_gettime(CLOCK_MONOTONIC, &tc);
 	while (1) {
 		time(&timer);
@@ -298,14 +321,18 @@ main(int argc, char *argv[])
 		{
 			int mpd_strlen = str_utf8_len(mpd_str);
 			/* Ensure title of current song will fit in bar */
-			if (mpd_strlen < 67) {
-				printf("^fg(e0def4)Playing:  %s    ^fg()", mpd_str);
+			if (mpd_strlen < 32) {
+				printf("^fg(e0def4)Playing:  ");
+				for (int i = 0; i < 32 - mpd_strlen; i++)
+					putc(' ', stdout);
+				write_utf8(mpd_str, mpd_strlen);
+				printf("    ^fg()");
 			}
 			else { /* Scroll text */
 				static int scroll_timer = 0, offset = 0;
 
 				printf("^fg(e0def4)Playing:  ");
-				write_utf8(&mpd_str[offset], 67);
+				write_utf8(&mpd_str[offset], 32);
 				printf("    ^fg()");
 
 				/*
@@ -324,7 +351,7 @@ main(int argc, char *argv[])
 #endif
 
 		get_volume(volume);
-		printf("│    ^fg(e0def4)Vol %s%%    ^fg()", volume);
+		printf("│    ^fg(e0def4)Volume %s%%    ^fg()", volume);
 
 		printf("│    ^fg(e0def4)%s %d%s %s %d - %s (UTC+%d)  \n", wdaystr[tm.tm_wday], tm.tm_mday, s, monstr[tm.tm_mon], tm.tm_year + 1900, timestr, (int)(tm.tm_gmtoff / 3600));
 		fflush(stdout);
