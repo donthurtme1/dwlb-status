@@ -250,7 +250,7 @@ main(int argc, char *argv[])
 	const char *s;
 	char volume[8];
 	char mpd_str[128];
-	time_t timer;
+	time_t time_of_day;
 	struct tm tm;
 	struct timespec tc;
 
@@ -292,11 +292,11 @@ main(int argc, char *argv[])
 	fclose(bat_full_fp);
 #endif
 
-	set_title("^fg()^bg()  │");
 	clock_gettime(CLOCK_MONOTONIC, &tc);
-	while (1) {
-		time(&timer);
-		localtime_r(&timer, &tm);
+	for (time_t timer = 0; ; timer++)
+	{
+		time(&time_of_day);
+		localtime_r(&time_of_day, &tm);
 
 #ifdef LAPTOP
 		/* Laptop charge */
@@ -329,7 +329,7 @@ main(int argc, char *argv[])
 				printf("    ^fg()");
 			}
 			else { /* Scroll text */
-				static int scroll_timer = 0, offset = 0;
+				static int offset = 0;
 
 				printf("^fg(e0def4)Playing:  ");
 				write_utf8(&mpd_str[offset], 32);
@@ -338,13 +338,15 @@ main(int argc, char *argv[])
 				/*
 				 * Increment scroll_timer and calculate string index
 				 */
-				scroll_timer++;
-				offset = scrolling_text_offset(mpd_str, scroll_timer);
+				offset = scrolling_text_offset(mpd_str, timer);
 
-				if (scroll_timer >= mpd_strsize - 67)
-					scroll_timer = 0;
+				if (timer >= mpd_strsize - 67)
+					timer = 0;
 			}
 		}
+
+		if (timer % 60 == 0)
+			set_title("^fg()^bg()  │");
 
 #ifdef LAPTOP
 		printf("│    ^fg(e0def4)Bat %d%%    ^fg()", (int)(((float)now / (float)full) * 100));
